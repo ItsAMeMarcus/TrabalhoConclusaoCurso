@@ -1,8 +1,15 @@
 from .celery_app import celery_app
 import PyPDF2
 import io
-from app.core.config import llm_rapido, llm_pro
+from app.core.config import llm_rapido, llm_pro, langfuse
 
+import langchain
+from langchain.globals import set_debug
+
+# --- ADICIONE ESTAS DUAS LINHAS AQUI ---
+set_debug(True)
+
+from langfuse.langchain import CallbackHandler
 # --- IMPORTS PADRÃO E DE SISTEMA ---
 import os
 import json
@@ -55,6 +62,10 @@ def processar_documento_pdf(file_content: bytes):
     """
     Esta função é executada por um Worker do Celery em segundo plano.
     """
+
+    langfuse_handler = CallbackHandler()
+        
+
     # 1. Ler o conteúdo do arquivo    
     texto_completo = _read_pdf_text(file_content)
     
@@ -94,7 +105,7 @@ def processar_documento_pdf(file_content: bytes):
         ),
         verbose=True,
         allow_delegation=False,
-        llm=llm_rapido
+        llm=llm_pro
     )
 
     # Agente 3: Responsável por corrigir o texto
@@ -246,13 +257,13 @@ def processar_documento_pdf(file_content: bytes):
     #Tarefa 5: Gerar embeddings
     tarefa_gerar_embeddings = Task(
         description=(
-        "Sua única tarefa é pegar o resultado da tarefa anterior (que é uma string JSON de um dicionário de chunks) "
-        "e usá-lo como o único argumento para a ferramenta 'Gerador de Embeddings BERT'. "
-        "Execute a ferramenta e retorne o resultado dela diretamente. Não faça a chamada para a LLM para saber o que fazer, somente retorne o resultado da ferramenta."
+        "Sua única tarefa é pegar o resultado da tarefa anterior, que é uma string JSON de um dicionário de chunks, "
+        "e passá-lo como o único argumento para a ferramenta 'Gerador de Embeddings BERT'. "
+        "O resultado desta ferramenta deve ser sua resposta final, sem nenhuma palavra ou pensamento adicional."
         ),
         expected_output=(
-            "A string de resultado exata retornada pela ferramenta 'Gerador de Embeddings BERT'. "
-            "Será uma nova string JSON contendo os embeddings numerados."
+            "A string JSON exata e bruta retornada pela ferramenta 'Gerador de Embeddings BERT'. "
+            "Não inclua 'Final Answer:', pensamentos, ou qualquer outro texto. Apenas a string JSON."
         ),
         agent=gerador_embeddings,
         context=[tarefa_segmentar] # Recebe a lista de chunks da tarefa anterior
@@ -263,15 +274,17 @@ def processar_documento_pdf(file_content: bytes):
     crew = Crew(
         agents=[preparador_texto, revisor_conteudo, corretor_feedback, segmentador, gerador_embeddings],
         tasks=[tarefa_leitura, tarefa_revisar, tarefa_corrigir,tarefa_segmentar,tarefa_gerar_embeddings],
-        process=Process.sequential, # As tarefas são executadas em ordem
-        manager_llm=llm_rapido,
+        process=Process.sequential,
         verbose=True
     )
-    resultado = crew.kickoff()
-    
+    with langfuse.start_as_current_span(name="crewai-tcc-trace"):
+        resultado = crew.kickoff()
+
     # 4. (Opcional) Salvar o resultado final no banco de dados ou em outro lugar
     print("Processamento concluído com sucesso!")
     print(resultado)
+    
+    langfuse.flush()
     return json.loads(resultado)
     ###IMPORTANTE###
     # - Podemos voltar aqui para estruturar a saída final da nossa equipe
