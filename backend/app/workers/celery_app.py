@@ -10,7 +10,7 @@ celery_app = Celery(
     broker='redis://localhost:6379/0',
     backend='redis://localhost:6379/0',
     # A linha abaixo diz ao Celery para procurar por tarefas no seu arquivo crew_tasks
-    include=['app.workers.crew_tasks']
+    include=['app.workers.crew_assemble']
 )
 
 # Configurações opcionais

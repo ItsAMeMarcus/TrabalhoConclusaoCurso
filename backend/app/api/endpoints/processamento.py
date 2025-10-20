@@ -1,6 +1,6 @@
 import shutil
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from app.workers.crew_tasks import processar_documento_pdf
+from app.workers.crew_assemble import processar_documento_pdf
 
 # O 'router' é como um mini-aplicativo FastAPI que pode ser incluído no principal
 router = APIRouter()

@@ -1,18 +1,19 @@
-# app/tools/semantic_splitter_tool.py
-
 import json
 from crewai.tools import BaseTool
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from typing import List
+from pydantic import BaseModel, Field
+
+class SemanticTextSplitterInput(BaseModel):
+    argument: str = Field(..., description="Divide um texto longo em chunks, retornando um JSON que contém um dicionario com os chunks enumerados por ordem")
 
 class SemanticTextSplitterTool(BaseTool):
     name: str = "Ferramenta de Divisão Semântica de Texto"
-    description: str = "Divide um texto longo em chunks, retornando um dicionário com os chunks numerados."
+    description: str = "Divide um texto longo em chunks, retornando um JSON que contém um dicionario com os chunks enumerados por ordem"
 
     def _run(self, text_content: str) -> str:
         """
-        Divide o texto e retorna um dicionário JSON com chunks numerados (a partir do 1).
-        Exemplo de retorno: '{"1": "Primeiro chunk de texto...", "2": "Segundo chunk..."}'
+        Divide o texto e retorna um JSON contendo um dicionario com chunks numerados (a partir do 1).
+        Formato do JSON: '{"1": "Primeiro chunk de texto...", "2": "Segundo chunk..."}'
         """
         try:
             # A estratégia de separadores continua a mesma para manter a coesão semântica.

@@ -1,5 +1,3 @@
-# app/tools/embedding_generator_tool.py
-
 import json
 import torch
 from crewai.tools import BaseTool
