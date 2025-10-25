@@ -1,27 +1,54 @@
 import json
 import torch
-from crewai.tools import BaseTool
-from transformers import BertTokenizer, BertModel
-from typing import List, Any, Dict
+import os
+from crewai.tools import BaseTool 
+from typing import  Any
 from pydantic.v1 import PrivateAttr
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 
 class EmbeddingGeneratorTool(BaseTool):
-    name: str = "Gerador de Embeddings BERT"
-    description: str = "Recebe um dicionário JSON de chunks, gera embeddings e retorna um dicionário JSON com os embeddings."
+    name: str = "Ferramenta de Geração e Armazenamento de Embeddings"
+    description: str = (
+        "Recebe um dicionário JSON de chunks, gera seus embeddings localmente com BERT, "
+        "e os armazena diretamente no banco de dados vetorial. Retorna uma mensagem de sucesso."
+    )
 
-    _device: Any = PrivateAttr()
-    _tokenizer: Any = PrivateAttr()
-    _model: Any = PrivateAttr()
+    # --- Atributos privados para carregar o modelo uma única vez ---
+    _embedding_model: Any = PrivateAttr()
+    _vector_store: Any = PrivateAttr()
+    _index_path: str = PrivateAttr()
 
-    def __init__(self, model_name='neuralmind/bert-base-portuguese-cased', **kwargs):
+    def __init__(self, index_path: str = "faiss_index", model_name='neuralmind/bert-base-portuguese-cased', **kwargs):
         super().__init__(**kwargs)
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"EmbeddingGeneratorTool: Usando dispositivo: {self._device}")
         
-        self._tokenizer = BertTokenizer.from_pretrained(model_name)
-        self._model = BertModel.from_pretrained(model_name).to(self._device)
-        self._model.eval()
-        print(f"EmbeddingGeneratorTool: Modelo '{model_name}' carregado com sucesso.")
+        # --- 1. Inicializa o Modelo de Embedding (Bertimbau) ---
+        # Usamos o wrapper do LangChain para ser compatível com o FAISS.
+        # Ele vai rodar localmente no seu dispositivo.
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"BertFaissStorageTool: Carregando modelo '{model_name}' no dispositivo: {device}")
+        self._embedding_model = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={'device': device}
+        )
+        print(f"BertFaissStorageTool: Modelo '{model_name}' carregado.")
+
+        # --- 2. Carrega ou Cria o Índice FAISS ---
+        self._index_path = index_path
+        try:
+            if os.path.exists(index_path):
+                self._vector_store = FAISS.load_local(index_path, self._embedding_model, allow_dangerous_deserialization=True)
+                print(f"BertFaissStorageTool: Índice FAISS carregado de '{index_path}'.")
+            else:
+                # Se não existir, cria um FAISS vazio com um texto de placeholder
+                print("BertFaissStorageTool: Nenhum índice FAISS encontrado. Criando um novo...")
+                self._vector_store = FAISS.from_texts(["Iniciando o Vector Store."], self._embedding_model)
+                self._vector_store.save_local(self._index_path)
+                print(f"BertFaissStorageTool: Novo índice FAISS criado em '{index_path}'.")
+        except Exception as e:
+            print(f"Erro ao carregar/criar índice FAISS: {e}. Criando um novo em memória.")
+            # Fallback para um índice em memória se tudo der errado
+            self._vector_store = FAISS.from_texts(["Iniciando o Vector Store."], self._embedding_model)
 
     def _run(self, json_chunks_dict: str) -> str:
         """
@@ -40,34 +67,36 @@ class EmbeddingGeneratorTool(BaseTool):
                 return "Erro: O dicionário de chunks recebido está vazio."
 
             # O resto da lógica de embedding continua a mesma...
-            inputs = self._tokenizer(
-                chunks_texts, 
-                return_tensors='pt', 
-                padding=True, 
-                truncation=True, 
-                max_length=512
-            ).to(self._device)
+            print(f"[INFO TOOL]: Gerando e adicionando {len(chunks_texts)} chunks ao FAISS...")
+            self._vector_store.add_texts(
+                texts=chunks_texts
+            )
 
-            with torch.no_grad():
-                outputs = self._model(**inputs)
+            # --- ETAPA 3: Salvar o Índice Atualizado no Disco ---
+            self._vector_store.save_local(self._index_path)
+            print(f"[INFO TOOL]: Índice FAISS atualizado e salvo em '{self._index_path}'.")
 
-            attention_mask = inputs['attention_mask']
-            mask_expanded = attention_mask.unsqueeze(-1).expand(outputs.last_hidden_state.size()).float()
-            sum_embeddings = torch.sum(outputs.last_hidden_state * mask_expanded, 1)
-            sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
-            mean_pooled_embeddings = sum_embeddings / sum_mask
-            
-            embeddings_list = mean_pooled_embeddings.cpu().numpy().tolist()
-
-            # --- MUDANÇA PRINCIPAL (SAÍDA) ---
-            # 3. Cria um novo dicionário associando o ID original de cada chunk ao seu novo embedding
-            #    Isso mantém a conexão entre o texto e seu vetor.
-            embeddings_dict = {chunk_id: embedding for chunk_id, embedding in zip(chunks_dict.keys(), embeddings_list)}
-            
-            # 4. Retorna o resultado como uma string JSON para a próxima tarefa
-            return json.dumps(embeddings_dict)
+            # --- ETAPA 4: Retornar Mensagem Simples (A Solução do Problema) ---
+            return f"SUCESSO: {len(chunks_texts)} chunks foram vetorizados com Bertimbau e armazenados com sucesso no índice FAISS."
 
         except json.JSONDecodeError:
             return "Erro: A entrada não era uma string JSON válida."
         except Exception as e:
-            return f"Ocorreu um erro ao gerar os embeddings: {e}"
+            return f"FALHA: Ocorreu um erro no processamento FAISS. Erro: {e}"
+
+#testar isso depois
+# from langchain_community.document_loaders import PyPDFLoader
+
+# # 1. Instancie o Loader com o caminho do seu arquivo
+# loader = PyPDFLoader("seu_documento.pdf")
+
+# # 2. Use o método load() para extrair o texto em uma lista de 'Documents'
+# documents = loader.load() 
+
+# # 'documents' agora é uma lista, onde cada elemento é uma página do PDF
+# print(f"Número de páginas carregadas: {len(documents)}")
+
+# # Acessando o texto da primeira página
+# primeira_pagina_texto = documents[0].page_content 
+# print("\nConteúdo da Primeira Página (Primeiros 200 caracteres):")
+# print(primeira_pagina_texto[:200])

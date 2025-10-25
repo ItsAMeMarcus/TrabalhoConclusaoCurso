@@ -104,15 +104,15 @@ class PreProcessingTasks():
     #Tarefa 5: Gerar embeddings
     def tarefa_gerar_embeddings(self, gerador_embeddings, tarefa_segmentar):
         return Task(
-        description=(
-            "A tarefa anterior produziu uma string JSON. Sua única ação é pegar essa string "
-            "e passá-la como argumento para a ferramenta 'Gerador de Embeddings BERT'. "
-            "Não analise, modifique ou pense sobre o conteúdo da string. Apenas a utilize na ferramenta."
-        ),
-        expected_output=(
-            "A string de saída EXATA e BRUTA retornada pela ferramenta 'Gerador de Embeddings BERT'. "
-            "Não adicione nenhum texto, explicação, ou formatação como 'Final Answer:'. Apenas a string JSON."
-        ),
-        agent=gerador_embeddings,
+        description=f"""
+            Gere o embedding e indexe o chunk de texto que veio do agente anterior no Vector Store.
+    
+            **Instrução Crítica:** Você DEVE usar a 'EmbeddingGeneratorTool' e passar o Chunk de Texto integralmente para a Tool.
+            Não adicione nenhum outro texto ou histórico à chamada da Tool.
+            """,        
+            expected_output=(
+                "Uma mensagem de SUCESSO indicando que o chunk foi armazenado com o tamanho correto."
+            ),
+            agent=gerador_embeddings,
             context=[tarefa_segmentar]
         )

@@ -1,4 +1,3 @@
-import shutil
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from app.workers.crew_assemble import processar_documento_pdf
 

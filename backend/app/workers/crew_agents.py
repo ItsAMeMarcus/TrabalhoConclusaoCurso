@@ -67,7 +67,7 @@ class PreProcessingAgents():
                 "que encapsulem ideias completas, garantindo que cada vetor gerado posteriormente represente um conceito "
                 "claro e distinto."
             ),
-            tools=[SemanticTextSplitterTool()], # Equipado com a ferramenta semântica
+            tools=[SemanticTextSplitterTool(result_as_answer=True)], # Equipado com a ferramenta semântica
             allow_delegation=False,
             verbose=True,
             # Pode usar um LLM rápido, pois a tarefa é principalmente chamar a ferramenta
@@ -77,16 +77,13 @@ class PreProcessingAgents():
     # --- AGENTE 5: GERADOR DE EMBEDDINGS ---
     def gerador_embeddings(self):
         return Agent(
-            role='Especialista em Vetorização de Texto',
-            goal='Converter chunks de texto limpo em representações numéricas (embeddings).',
+            role='Especialista em Indexação de Documentos',
+            goal='Receber chunks de texto, convertê-los em embeddings e armazená-los no Vector Store para futura recuperação.',
             backstory=(
-                "Você é um engenheiro de Processamento de Linguagem Natural (PNL) focado em transformar a linguagem humana "
-                "num formato que os computadores possam entender. Sua especialidade é usar modelos de deep learning, como o BERT, "
-                "para capturar o significado semântico profundo de um texto. Você não lê apenas as palavras, você compreende o "
-                "contexto e a intenção por trás delas, convertendo essa compreensão em vetores numéricos de alta dimensão. "
-                "Seu trabalho é a ponte entre o texto qualitativo e a análise quantitativa, preparando o terreno para "
-                "tarefas avançadas como busca por similaridade, classificação de documentos e clustering de tópicos. Você sabe muito bem fazer o seu trabalho sem ultrapassar o limite dos seus recursos, sempre usando o minimo possivel sem perder a qualidade."
-            ),
+                "Você é um engenheiro de dados focado em eficiência. Sua função é estritamente técnica: "
+                "executar a Tool de Geração de Embeddings com a maior economia de contexto possível, "
+                "garantindo que APENAS o chunk seja passado para a Tool."
+            ),          
             llm=llm_rapido,
             tools=[EmbeddingGeneratorTool()],
             allow_delegation=False,
