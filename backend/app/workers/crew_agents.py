@@ -1,14 +1,12 @@
 from crewai import Agent
-from app.core.config import llm_rapido, llm_pro
-from app.tools.semantic_splitter_tool import SemanticTextSplitterTool
+from app.core.config import llm_rapido, llm_pro, llm_flash, llm_flash_lite
 from app.tools.embedding_generator_tool import EmbeddingGeneratorTool
+from app.tools.pdf_loader import PDFLoaderTool
+from app.tools.semantic_splitter_tool import SemanticTextSplitterTool
 
 class PreProcessingAgents():
 
-    semantic_splitter = SemanticTextSplitterTool()
-    embedding_generator = EmbeddingGeneratorTool()
-
-    def preparador_texto(self):
+    def preparador_texto(self, pdf_bytes: bytes):
         return Agent(
             role='Preparador de Conteúdo',
             goal='Ler textos grandes e passar para análise subsequente.',
@@ -17,13 +15,14 @@ class PreProcessingAgents():
                 "Sua principal habilidade é fazer a leitura de documentos grandes, "
                 "garantindo que o texto esteja pronto para ser processado por outros agentes."
             ),
-            verbose=True,
-            allow_delegation=False,
-            llm=llm_rapido
+            verbose=False,
+            tools=[PDFLoaderTool(result_as_answer=True, pdf_bytes= pdf_bytes)],
+            llm=llm_flash
         )
 
     # Agente 2: Responsável por revisar cada pedaço
     def revisor_conteudo(self):
+
         return Agent(
             role='Revisor de Conteúdo Sênior',
             goal='Analisar criticamente cada pedaço de texto, identificando erros gramaticais, de clareza e de estilo, e gerar um relatório de feedback acionável.',
@@ -35,7 +34,7 @@ class PreProcessingAgents():
             ),
             verbose=True,
             allow_delegation=False,
-            llm=llm_pro
+            llm=llm_rapido
         )
 
     # Agente 3: Responsável por corrigir o texto
@@ -56,7 +55,7 @@ class PreProcessingAgents():
         )
 
     #Agente 4: Responsável em dividir o texto focando em manter o valor semantico desses chunks
-    def segmentador(self):
+    def segmentador(self, texto_completo:str):
         return Agent(
             role='Segmentador Semântico de Documentos',
             goal='Dividir um documento de texto limpo em chunks coesos e semanticamente significativos, preparando-os para a vetorização.',
@@ -67,25 +66,25 @@ class PreProcessingAgents():
                 "que encapsulem ideias completas, garantindo que cada vetor gerado posteriormente represente um conceito "
                 "claro e distinto."
             ),
-            tools=[SemanticTextSplitterTool(result_as_answer=True)], # Equipado com a ferramenta semântica
+            tools=[SemanticTextSplitterTool(result_as_answer=True, text_content=texto_completo)], # Equipado com a ferramenta semântica
             allow_delegation=False,
             verbose=True,
             # Pode usar um LLM rápido, pois a tarefa é principalmente chamar a ferramenta
-            llm=llm_pro
+            llm=llm_flash
         )
 
     # --- AGENTE 5: GERADOR DE EMBEDDINGS ---
-    def gerador_embeddings(self):
+    def gerador_embeddings(self, novo_tcc, db):
         return Agent(
             role='Especialista em Indexação de Documentos',
-            goal='Receber chunks de texto, convertê-los em embeddings e armazená-los no Vector Store para futura recuperação.',
+            goal='Receber chunks de texto, convertê-los em embeddings e armazená-los no PGVector para futura recuperação.',
             backstory=(
                 "Você é um engenheiro de dados focado em eficiência. Sua função é estritamente técnica: "
                 "executar a Tool de Geração de Embeddings com a maior economia de contexto possível, "
                 "garantindo que APENAS o chunk seja passado para a Tool."
             ),          
-            llm=llm_rapido,
-            tools=[EmbeddingGeneratorTool()],
+            llm=llm_flash_lite,
+            tools=[EmbeddingGeneratorTool(novo_tcc=novo_tcc, db=db)],
             allow_delegation=False,
-            verbose=True
+            verbose=False
         )

@@ -1,0 +1,23 @@
+services:
+  postgres_db:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    container_name: mba_postgres
+    environment:
+      POSTGRES_USER: admin_mba
+      POSTGRES_PASSWORD: eoesquadraonaotemjeito 
+      POSTGRES_DB: db_mba
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+  redis:
+    image: redis
+    container_name: mba_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+volumes:
+  postgres_data:
+    driver: local

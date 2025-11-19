@@ -1,15 +1,30 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from typing import Annotated
+from app.data.models import Tcc
+from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from app.workers.crew_assemble import processar_documento_pdf
 
 # O 'router' é como um mini-aplicativo FastAPI que pode ser incluído no principal
 router = APIRouter()
 
 @router.post("/processar-documento")
-async def criar_tarefa_processamento(file: UploadFile = File(...)):
+async def criar_tarefa_processamento(
+        titulo: Annotated[str, Form(...)],
+        autor: Annotated[str, Form(...)],
+        ano: Annotated[int, Form(...)],
+        orientador: Annotated[str, Form(...)],
+        file: Annotated[UploadFile, File(...)]
+        ):
     """
     Recebe um arquivo PDF, lê seu conteúdo para a memória e inicia a tarefa
     de processamento em segundo plano, passando os bytes do arquivo.
     """
+    metadados = {
+        "titulo": titulo,
+        "autor": autor,
+        "orientador": orientador,
+        "ano": ano,
+        "filename_original": file.filename
+    }
     # if file.content_type != "application/pdf":
     #     raise HTTPException(status_code=400, detail="Tipo de arquivo inválido. Apenas PDFs são aceitos.")
     # # Salva o arquivo enviado no disco
@@ -22,7 +37,11 @@ async def criar_tarefa_processamento(file: UploadFile = File(...)):
 
 
     # O .delay() não espera a tarefa terminar, ele apenas a coloca na fila.
-    task = processar_documento_pdf.delay(file_content=pdf_bytes)
+    task = processar_documento_pdf.delay(file_content=pdf_bytes, metadados_formulario=metadados)
 
     # Retorna uma resposta imediata para o cliente com o ID da tarefa
-    return {"job_id": task.id, "status": "Tarefa de processamento iniciada com sucesso."}
+    return {
+        "job_id": task.id,
+        "status": "Tarefa de processamento iniciada com sucesso.",
+        "metadados": [metadados.get("ano"), metadados.get("titulo"), metadados.get("autor"), metadados.get("orientador")]
+    }

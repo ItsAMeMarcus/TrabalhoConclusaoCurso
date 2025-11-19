@@ -1,15 +1,14 @@
 from crewai import Task
 
+from app.tools.semantic_splitter_tool import ChunksOutput
+
 class PreProcessingTasks():
      # Tarefa 1: Dividir o texto
-    def tarefa_leitura(self, preparador_texto, texto_completo):
+    def tarefa_leitura(self, preparador_texto):
         return Task(
             description=f"""
-            Leia o texto e passe para o próximo agente.
-
-            Aqui está o texto que você precisa passar:
-
-            {texto_completo}
+            Use a ferramentea que lhe foi dada para fazer a extração do texto do PDF e passe
+            para o próximo agente
             """,
             expected_output='O texto a ser revisado, pronto para ser enviado para o revisor.',
             agent=preparador_texto
@@ -57,7 +56,7 @@ class PreProcessingTasks():
                 "Você recebeu dois insumos: o texto original e o relatório de feedbacks do revisor. "
                 "Sua missão é processar uma lista de trechos do texto e seus respectivos feedbacks e aplicar cada uma das sugestões de correção ao texto. "
                 "Seu resultado final deve ser o texto corrigido e limpo."
-                "APLIQUE TODAS AS CORREÇÕES SUGERIDAS A TODOS OS TRECHOS. "
+                "APLIQUE TODAS AS CORREÇÕES SUGERIDAS A TODOS OS TRECHOS E RETORNE O TEXTO COMPLETO. "
                 "O seu resultado final deve ser o texto, com todos os trechos já corrigidos, formatado para NLP. "
                 "Tente ser o mais eficiente possível, processando o máximo de trechos que conseguir em cada passo do seu raciocínio."
             ),
@@ -74,30 +73,42 @@ class PreProcessingTasks():
                 "2. **Fluxo das Frases:** Elimine todas as quebras de linha que ocorrem no MEIO de uma frase, unindo o texto para que cada frase seja uma linha contínua dentro do seu parágrafo.\n"
                 "3. **Limpeza de Espaços:** Remova todos os espaços em branco desnecessários, como espaços duplos entre palavras ou espaços no início ou fim de uma linha.\n"
                 "4. **Remoção Final de Artefatos:** Faça uma varredura final para remover quaisquer artefatos restantes que não sejam texto corrido (ex: números de página)."
+                "5. **Retorno do texto completo:** Entregue como resultado o texto completamente revisado, corrigido e completo. Você não deve cortar o texto, não importa o que aconteça. Entretanto, somente o texto corrigido é interessante, ou seja, o seu processo de pensamento não pode aparecer na versão final do texto. Se for interessante, você pode pensar sobre o que vai fazer e como vai fazer e só depois retornar o texto completo"
             ),
             agent=corretor_feedback,
-            context=[tarefa_revisar, tarefa_leitura] # Usa o resultado da tarefa de revisão
+            context=[tarefa_leitura, tarefa_revisar]
         )
 
     #Tarefa 4: Dividir o texto já corrigido sem perder o sentido.
     def tarefa_segmentar(self, segmentador, tarefa_corrigir):
         return Task(
             description=(
-                "Você recebeu um texto já pré-corrigido. "
-                "Sua única e exclusiva missão é pegar ess texto e passá-lo diretamente como o argumento 'text_content' para a ferramenta 'Ferramenta de Divisão Semântica de Texto'. "
-                "Use a 'Ferramenta de Divisão Semântica de Texto' para dividir este texto completo "
-                "em chunks que sejam semanticamente coesos e otimizados."
-                "Não tente analisar ou modificar a string, apenas a repasse para a ferramenta e passe seu resultado para o próximo agente."
+                """Você recebeu um texto já pré-corrigido. 
+                Sua missão é pegar esse texto e passá-lo diretamente como o argumento 'text_content' para a ferramenta 'Ferramenta de Divisão Semântica de Texto'. 
+                Use a 'Ferramenta de Divisão Semântica de Texto' para dividir este texto completo 
+                em chunks que sejam semanticamente coesos e otimizados.
+                }"""
             ),
             expected_output=(
-                "Uma ÚNICA STRING em formato JSON que representa um dicionário que vai vir diretamente da ferramenta. "
-                "As chaves do dicionário vão ser os números dos chunks em ordem cronológica (começando em '1'), "
-                "e os valores vão ser os textos dos chunks. "
-                "Não faça NENHUMA mudança no texto que vier da ferramenta, somente repasse para o próximo agente."
-                "Exemplo: '[{1: \\\"Pedaco1\\\"}, {2: \\\"Pedaco2\\\"}, {3: \\\"Pedaco3\\\"}]'"
+                """
+                Uma ÚNICA STRING em formato JSON que representa um dicionário que vai vir diretamente da ferramenta.
+                As chaves do dicionário vão ser os números dos chunks em ordem cronológica (começando em '1'), 
+                e os valores vão ser os textos dos chunks. 
+                Exemplo: 
+                "{
+                    "json_chunks":
+                        [
+                            {1: "Pedaco1"},
+                            {2: "Pedaco2"},
+                            {3: "Pedaco3"}
+                        ]
+                }"
+                """
             ),
             agent=segmentador,
             # Esta tarefa precisa do output do corretor para começar.
+            output_json=ChunksOutput,
+            markdown=False,
             context=[tarefa_corrigir]
         )
 
@@ -105,10 +116,13 @@ class PreProcessingTasks():
     def tarefa_gerar_embeddings(self, gerador_embeddings, tarefa_segmentar):
         return Task(
         description=f"""
-            Gere o embedding e indexe o chunk de texto que veio do agente anterior no Vector Store.
+            Gere o embedding e indexe o chunk de texto que veio do agente anterior.
+            Ao receber o texto da tarefa do agente de segmentação semântica, 
     
-            **Instrução Crítica:** Você DEVE usar a 'EmbeddingGeneratorTool' e passar o Chunk de Texto integralmente para a Tool.
+            **Instrução Crítica:** Você DEVE usar a 'EmbeddingGeneratorTool' e passar a string que veio do agente anterior integralmente para a Tool. É de extrema importância que essa string seja entregue para a ferramenta sem nenhum tipo de corte.
             Não adicione nenhum outro texto ou histórico à chamada da Tool.
+
+            ATENÇÃO: NÃO IMPORTA O QUE ACONTEÇA NÃO MANDE O HISTÓRICO INTEIRO DA CREW PARA A FERRAMENTA. A FERRAMENTA SOMENTE DEVE RECEBER A SAÍDA DO AGENTE ANTERIOR.
             """,        
             expected_output=(
                 "Uma mensagem de SUCESSO indicando que o chunk foi armazenado com o tamanho correto."

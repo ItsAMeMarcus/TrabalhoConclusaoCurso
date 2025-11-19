@@ -1,5 +1,4 @@
-# app/workers/celery_app.py
-
+import os
 from celery import Celery
 
 # O primeiro argumento é o nome do módulo principal do seu projeto.
@@ -7,8 +6,8 @@ from celery import Celery
 # O 'backend' também usa o Redis para armazenar os resultados das tarefas.
 celery_app = Celery(
     'tasks',
-    broker='redis://localhost:6379/0',
-    backend='redis://localhost:6379/0',
+    broker= os.getenv('CELERY_BROKER_URL'),
+    backend=os.getenv('CELERY_RESULT_BACKEND'),
     # A linha abaixo diz ao Celery para procurar por tarefas no seu arquivo crew_tasks
     include=['app.workers.crew_assemble']
 )
