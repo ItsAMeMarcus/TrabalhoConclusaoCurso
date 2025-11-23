@@ -121,11 +121,12 @@ class PreProcessingTasks():
     
             **Instrução Crítica:** Você DEVE usar a 'EmbeddingGeneratorTool' e passar a string que veio do agente anterior integralmente para a Tool. É de extrema importância que essa string seja entregue para a ferramenta sem nenhum tipo de corte.
             Não adicione nenhum outro texto ou histórico à chamada da Tool.
-
-            ATENÇÃO: NÃO IMPORTA O QUE ACONTEÇA NÃO MANDE O HISTÓRICO INTEIRO DA CREW PARA A FERRAMENTA. A FERRAMENTA SOMENTE DEVE RECEBER A SAÍDA DO AGENTE ANTERIOR.
+            NÃO tente ler, validar ou processar o conteúdo do JSON. 
+            NÃO execute a ferramenta mais de uma vez. 
+            Assim que chamar a ferramenta, considere o trabalho FEITO.
             """,        
             expected_output=(
-                "Uma mensagem de SUCESSO indicando que o chunk foi armazenado com o tamanho correto."
+                "Uma confirmação de salvamento."
             ),
             agent=gerador_embeddings,
             context=[tarefa_segmentar]

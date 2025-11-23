@@ -74,7 +74,7 @@ class PreProcessingAgents():
         )
 
     # --- AGENTE 5: GERADOR DE EMBEDDINGS ---
-    def gerador_embeddings(self, novo_tcc, db):
+    def gerador_embeddings(self, metadados_tcc):
         return Agent(
             role='Especialista em Indexação de Documentos',
             goal='Receber chunks de texto, convertê-los em embeddings e armazená-los no PGVector para futura recuperação.',
@@ -83,8 +83,9 @@ class PreProcessingAgents():
                 "executar a Tool de Geração de Embeddings com a maior economia de contexto possível, "
                 "garantindo que APENAS o chunk seja passado para a Tool."
             ),          
-            llm=llm_flash_lite,
-            tools=[EmbeddingGeneratorTool(novo_tcc=novo_tcc, db=db)],
+            llm=llm_pro,
+            tools=[EmbeddingGeneratorTool(metadados_tcc=metadados_tcc)],
             allow_delegation=False,
-            verbose=False
+            verbose=False,
+            max_iter=1
         )

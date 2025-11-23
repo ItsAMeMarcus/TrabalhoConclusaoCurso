@@ -1,12 +1,11 @@
 import json
 from pydantic import BaseModel,Field
-from sqlalchemy.orm import Session
 import torch
 from crewai.tools import BaseTool 
 from typing import  Any, Dict, List, Type
 from pydantic.v1 import PrivateAttr
 from langchain_huggingface import HuggingFaceEmbeddings
-from app.data.models import Chunk, Tcc
+from app.data.vector_store import TccVectorStore
 
 class ChunksInput(BaseModel):
     json_chunks: List[Dict[str,str]] = Field(description="Uma string JSON contendo a lista de chunks no formato '{ \"json_chunks\": [...] }'."
@@ -21,11 +20,10 @@ class EmbeddingGeneratorTool(BaseTool):
     args_schema: Type[BaseModel] = ChunksInput
     # --- Atributos privados para carregar o modelo uma única vez ---
     _embedding_model: Any = PrivateAttr()
-    _tcc_id: Any = PrivateAttr()
-    _novo_tcc: Tcc = PrivateAttr()
-    _db: Session = PrivateAttr()
+    _metadata_tcc: Dict = PrivateAttr()
+    _vector_store: TccVectorStore = PrivateAttr()  
 
-    def __init__(self, novo_tcc:Tcc, db: Session, model_name='neuralmind/bert-base-portuguese-cased', **kwargs):
+    def __init__(self, metadados_tcc: Dict, model_name='neuralmind/bert-base-portuguese-cased', **kwargs):
         super().__init__(**kwargs)
         
         # --- 1. Inicializa o Modelo de Embedding (Bertimbau) ---
@@ -39,8 +37,12 @@ class EmbeddingGeneratorTool(BaseTool):
         )
         print(f"BertFaissStorageTool: Modelo '{model_name}' carregado.")
 
-        self._novo_tcc = novo_tcc
-        self._db = db
+        self._metadados_tcc = metadados_tcc
+        try:
+            self._vector_store = TccVectorStore(vector_size=768)
+            print("Preparações compĺetas, segue o baile")
+        except Exception as e:
+            print(f"Erro na conexão: {e}")
 
     def _run(self, json_chunks: List[Dict[str,str]]) -> str:
         """
@@ -74,24 +76,29 @@ class EmbeddingGeneratorTool(BaseTool):
             embeddings_vetoriais = self._embedding_model.embed_documents(chunks_texts)
             print("Embeddings gerados.")
 
-            self._db.add(self._novo_tcc)
-            self._db.commit() # Faz o commit para obter o ID
-            self._db.refresh(self._novo_tcc)
-            tcc_id =self._novo_tcc.id
-            print("Id do TCC gerado.")
-            chunks_para_salvar = []
+            dados_qdrant= []
             for i, texto in enumerate(chunks_texts):
-                novo_chunk = Chunk(
-                    tcc_id=tcc_id,
-                    texto_chunk=texto,
-                    numero_chunk=i,
-                    embedding=embeddings_vetoriais[i] # Salva o vetor!
-                )
-                chunks_para_salvar.append(novo_chunk)
+                dados_qdrant.append({
+                    "text": texto,
+                    "embedding": embeddings_vetoriais[i],
+                    "metadata": {
+                        **self._metadados_tcc,
+                        "ordem_chunk": i
+                    }
+                })
 
-            self._db.bulk_save_objects(chunks_para_salvar) # Otimizado para salvar muitos
+            print("Mandando chunks para o Qdrant...")
+            qtd_salva = self._vector_store.upsert_chunks(dados_qdrant)
             # --- ETAPA 4: Retornar Mensagem Simples (A Solução do Problema) ---
 
-            return f"Sucesso: gerados {len(chunks_texts)} chunks e salvos no banco de dados!"
+            return f"Sucesso: gerados {qtd_salva} chunks e salvos no banco de dados!"
+                    
         except json.JSONDecodeError:
             return "Erro: A entrada não era uma string JSON válida."
+        except ValueError as ve:
+            # Erro de dimensão (384 vs 768)
+            return f"ERRO DE CONFIGURAÇÃO: {str(ve)}"
+        except Exception as e:
+            # Outros erros
+            print(f"Erro detalhado na Tool: {e}")
+            return f"ERRO NO PROCESSAMENTO: {str(e)}"

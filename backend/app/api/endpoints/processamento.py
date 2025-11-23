@@ -1,5 +1,4 @@
 from typing import Annotated
-from app.data.models import Tcc
 from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from app.workers.crew_assemble import processar_documento_pdf
 
