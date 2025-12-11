@@ -1,8 +1,8 @@
-from .celery_app import celery_app
+from app.workers.celery_app import celery_app
 from langchain.globals import set_debug
 from crewai import Crew, Process
-from app.workers.crew_agents import PreProcessingAgents
-from app.workers.crew_tasks import PreProcessingTasks
+from app.workers.ETL.crew_agents import PreProcessingAgents
+from app.workers.ETL.crew_tasks import PreProcessingTasks
 
 #os.environ["OPENAI_API_KEY"] = "NA" 
 from dotenv import load_dotenv

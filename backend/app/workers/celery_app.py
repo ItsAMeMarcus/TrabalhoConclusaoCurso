@@ -9,7 +9,7 @@ celery_app = Celery(
     broker= os.getenv('CELERY_BROKER_URL'),
     backend=os.getenv('CELERY_RESULT_BACKEND'),
     # A linha abaixo diz ao Celery para procurar por tarefas no seu arquivo crew_tasks
-    include=['app.workers.crew_assemble']
+    include=['app.workers.ETL.crew_assemble','app.workers.RAG.crew_assemble']
 )
 
 # Configurações opcionais

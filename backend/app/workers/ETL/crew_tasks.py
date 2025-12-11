@@ -1,6 +1,5 @@
 from crewai import Task
-
-from app.tools.semantic_splitter_tool import ChunksOutput
+from app.tools.ETL.semantic_splitter_tool import ChunksOutput
 
 class PreProcessingTasks():
      # Tarefa 1: Dividir o texto
@@ -115,16 +114,12 @@ class PreProcessingTasks():
     #Tarefa 5: Gerar embeddings
     def tarefa_gerar_embeddings(self, gerador_embeddings, tarefa_segmentar):
         return Task(
-        description=f"""
-            Gere o embedding e indexe o chunk de texto que veio do agente anterior.
-            Ao receber o texto da tarefa do agente de segmentação semântica, 
-    
-            **Instrução Crítica:** Você DEVE usar a 'EmbeddingGeneratorTool' e passar a string que veio do agente anterior integralmente para a Tool. É de extrema importância que essa string seja entregue para a ferramenta sem nenhum tipo de corte.
-            Não adicione nenhum outro texto ou histórico à chamada da Tool.
-            NÃO tente ler, validar ou processar o conteúdo do JSON. 
-            NÃO execute a ferramenta mais de uma vez. 
-            Assim que chamar a ferramenta, considere o trabalho FEITO.
-            """,        
+            description=f"""
+                Receba o output do agente anterior (que é um JSON).
+                Extraia o valor da chave. 
+                Use a 'EmbeddingGeneratorTool' passando essa lista EXATAMENTE como argumento. 
+                Não altere o conteúdo da lista, apenas passe a estrutura de dados correta.
+            """,
             expected_output=(
                 "Uma confirmação de salvamento."
             ),

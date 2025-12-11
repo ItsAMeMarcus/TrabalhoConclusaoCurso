@@ -5,7 +5,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import VectorParams, Distance
 
 class TccVectorStore:
-    def __init__(self, collection_name="my_tcc_collection", vector_size=768):
+    def __init__(self, collection_name, distancia, vector_size=1024):
         # NOTA: O BERT (neuralmind/bert-base-portuguese-cased) usa 768 dimensões, não 384.
         # Se usar outro modelo, ajuste o vector_size.
         
@@ -13,6 +13,7 @@ class TccVectorStore:
         self.client = QdrantClient(url="http://localhost:6333") 
         self.collection_name = collection_name
         self.vector_size = vector_size
+        self.distance = distancia
         
         # Garante que a coleção existe ao iniciar
         if not self.client.collection_exists(collection_name):
@@ -25,7 +26,7 @@ class TccVectorStore:
             collection_name=self.collection_name,
             vectors_config=VectorParams(
                 size=self.vector_size, 
-                distance=Distance.COSINE, 
+                distance=self.distance, 
                 on_disk=True
             ),
 

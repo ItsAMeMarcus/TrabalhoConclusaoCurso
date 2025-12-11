@@ -9,18 +9,18 @@ load_dotenv()
 
 # --- Configurações da API ---
 #GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
-LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
-LANGFUSE_HOST = os.getenv("LANGFUSE_HOST")
+#LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
+#LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
+#LANGFUSE_HOST = os.getenv("LANGFUSE_HOST")
 
 #if not GOOGLE_API_KEY:
  #   raise ValueError("A variável de ambiente GOOGLE_API_KEY não foi definida.")
 
-langfuse = Langfuse(
-    secret_key=LANGFUSE_SECRET_KEY,
-    public_key=LANGFUSE_PUBLIC_KEY,
-    host=LANGFUSE_HOST
-)
+#langfuse = Langfuse(
+#    secret_key=LANGFUSE_SECRET_KEY,
+ #   public_key=LANGFUSE_PUBLIC_KEY,
+  #  host=LANGFUSE_HOST
+#)
 
 # --- Instâncias de LLM pré-configuradas ---
 # LLM rápido e econômico para tarefas de revisão e segmentação

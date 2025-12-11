@@ -1,10 +1,11 @@
-from typing import Annotated, List
-from fastapi import APIRouter, File, UploadFile, HTTPException, Form
+from typing import List
+from fastapi import APIRouter, HTTPException
 from app.workers.ETL.crew_assemble import processar_documento_pdf
 import os
 from pydantic import BaseModel
 from celery import chain
 # O 'router' é como um mini-aplicativo FastAPI que pode ser incluído no principal
+
 router = APIRouter()
 
 class DocumentoMetadata(BaseModel):
@@ -13,46 +14,6 @@ class DocumentoMetadata(BaseModel):
     ano: int
     orientador: str
     caminho_arquivo: str
-
-@router.post("/processar-documento")
-async def criar_tarefa_processamento(
-        titulo: Annotated[str, Form(...)],
-        autor: Annotated[str, Form(...)],
-        ano: Annotated[int, Form(...)],
-        orientador: Annotated[str, Form(...)],
-        file: Annotated[UploadFile, File(...)]
-        ):
-    """
-    Recebe um arquivo PDF, lê seu conteúdo para a memória e inicia a tarefa
-    de processamento em segundo plano, passando os bytes do arquivo.
-    """
-    metadados = {
-        "titulo": titulo,
-        "autor": autor,
-        "orientador": orientador,
-        "ano": ano,
-        "filename_original": file.filename
-    }
-    # if file.content_type != "application/pdf":
-    #     raise HTTPException(status_code=400, detail="Tipo de arquivo inválido. Apenas PDFs são aceitos.")
-    # # Salva o arquivo enviado no disco
-    try:
-        pdf_bytes = await file.read()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Não foi possível ler o arquivo: {e}")
-    finally:
-        await file.close()
-
-
-    # O .delay() não espera a tarefa terminar, ele apenas a coloca na fila.
-    task = processar_documento_pdf.delay(file_content=pdf_bytes, metadados_formulario=metadados)
-
-    # Retorna uma resposta imediata para o cliente com o ID da tarefa
-    return {
-        "job_id": task.id,
-        "status": "Tarefa de processamento iniciada com sucesso.",
-        "metadados": [metadados.get("ano"), metadados.get("titulo"), metadados.get("autor"), metadados.get("orientador")]
-    }
 
 @router.post("/processar-lote-sequencial")
 async def processar_lote_sequencial(lista_documentos: List[DocumentoMetadata]):
@@ -112,5 +73,4 @@ async def processar_lote_sequencial(lista_documentos: List[DocumentoMetadata]):
         "status": "Lote sequencial iniciado.",
         "modo": "Chain (O próximo só inicia se o anterior tiver sucesso)",
         "quantidade": len(assinaturas_tarefas),
-        "chain_id": resultado_chain.id # ID da última tarefa da corrente (ou da corrente como um todo)
     }

@@ -29,6 +29,35 @@ class SemanticTextSplitterTool(BaseTool):
         self._text_content = text_content
 
 
+    def _merge_text_chunks(self, lista_chunks: list[str], min_chars: int = 200) -> list[str]:
+        chunks_finais = []
+        buffer = ""  # Nossa "sala de espera" para textos curtos
+    
+        for chunk in lista_chunks:
+            # 1. Se tem algo esperando no buffer, colamos antes do chunk atual
+            if buffer:
+                chunk = buffer + "\n" + chunk
+                buffer = "" # Esvazia o buffer
+
+            # 2. Verifica se o chunk (agora possivelmente maior) atingiu o tamanho mínimo
+            if len(chunk) < min_chars:
+                # Se ainda for pequeno, guarda no buffer para o próximo
+                buffer = chunk
+            else:
+                # Se o tamanho está bom, aprova e adiciona na lista final
+                chunks_finais.append(chunk)
+
+        # 3. Limpeza final: Se sobrou algo no buffer (ex: o texto acabou num título)
+        if buffer:
+            if chunks_finais:
+                # Cola no último chunk aprovado
+                chunks_finais[-1] += "\n" + buffer
+            else:
+                # Se só tinha isso no texto todo, adiciona assim mesmo
+                chunks_finais.append(buffer)
+
+        return chunks_finais
+
     def _run(self) -> str:
         """
         Divide o texto e retorna um JSON contendo um dicionario com chunks numerados (a partir do 1).
@@ -38,12 +67,15 @@ class SemanticTextSplitterTool(BaseTool):
             # A estratégia de separadores continua a mesma para manter a coesão semântica.
             text_splitter = RecursiveCharacterTextSplitter(
                 separators=["\n\n", "\n", ". ", " ", ""],
-                chunk_size=500,
-                chunk_overlap=50,
-                length_function=len
+                chunk_size=1000,
+                chunk_overlap=200,
+                length_function=len,
+                is_separator_regex=False
             )
-            chunks = text_splitter.split_text(self._text_content)
+            chunks_bruto = text_splitter.split_text(self._text_content)
             
+            chunks = self._merge_text_chunks(lista_chunks=chunks_bruto)
+
             # Filtra quaisquer chunks vazios que possam ter sido criados
             chunks = [chunk for chunk in chunks if chunk.strip()]
             
@@ -58,4 +90,4 @@ class SemanticTextSplitterTool(BaseTool):
             return json.dumps(final_output_dict, ensure_ascii=False)
         except Exception as e:
             return f"Erro ao dividir o texto em um dicionário: {e}"
-
+    

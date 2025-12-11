@@ -3,27 +3,30 @@ from pydantic import BaseModel,Field
 import torch
 from crewai.tools import BaseTool 
 from typing import  Any, Dict, List, Type
-from pydantic.v1 import PrivateAttr
+from pydantic import PrivateAttr
 from langchain_huggingface import HuggingFaceEmbeddings
 from app.data.vector_store import TccVectorStore
+from qdrant_client.http.models import Distance
 
 class ChunksInput(BaseModel):
-    json_chunks: List[Dict[str,str]] = Field(description="Uma string JSON contendo a lista de chunks no formato '{ \"json_chunks\": [...] }'."
+    json_chunks: List[Dict[str,str]] = Field(description="Uma string JSON contendo a lista de dicionário de chunks."
     )
 
 class EmbeddingGeneratorTool(BaseTool):
     name: str = "Ferramenta de Geração e Armazenamento de Embeddings"
     description: str = (
-        "Recebe um dicionário JSON de chunks, gera seus embeddings localmente com BERT, "
+        "Recebe uma lista de dicionários JSON com chunks, gera seus embeddings localmente com BERT, "
         "e os armazena diretamente no banco de dados vetorial. Retorna uma mensagem de sucesso."
     )
     args_schema: Type[BaseModel] = ChunksInput
     # --- Atributos privados para carregar o modelo uma única vez ---
-    _embedding_model: Any = PrivateAttr()
-    _metadata_tcc: Dict = PrivateAttr()
-    _vector_store: TccVectorStore = PrivateAttr()  
+    _embedding_model:Any = PrivateAttr(default=None)
+    _metadata_tcc:Any = PrivateAttr(default=None)
+    _vector_store_dot:Any = PrivateAttr(default=None)  
+    _vector_store_cosine:Any = PrivateAttr(default=None)  
+    _vector_store_euclidiana:Any = PrivateAttr(default=None)  
 
-    def __init__(self, metadados_tcc: Dict, model_name='neuralmind/bert-base-portuguese-cased', **kwargs):
+    def __init__(self, metadados_tcc: Dict, model_name='intfloat/multilingual-e5-large', **kwargs):
         super().__init__(**kwargs)
         
         # --- 1. Inicializa o Modelo de Embedding (Bertimbau) ---
@@ -39,7 +42,9 @@ class EmbeddingGeneratorTool(BaseTool):
 
         self._metadados_tcc = metadados_tcc
         try:
-            self._vector_store = TccVectorStore(vector_size=768)
+            self._vector_store_cosine = TccVectorStore(collection_name="tcc-collection-cosseno", distancia=Distance.COSINE)
+            self._vector_store_dot = TccVectorStore(collection_name="tcc-collection-ponto", distancia=Distance.DOT)
+            self._vector_store_euclidiana= TccVectorStore(collection_name="tcc-collection-euclidiana", distancia=Distance.EUCLID)
             print("Preparações compĺetas, segue o baile")
         except Exception as e:
             print(f"Erro na conexão: {e}")
@@ -50,30 +55,22 @@ class EmbeddingGeneratorTool(BaseTool):
         gera os embeddings e retorna uma nova STRING JSON com os embeddings.
         """
         try:
-            # --- MUDANÇA PRINCIPAL (ENTRADA) ---
-            # 1. Converte a string JSON de volta para um dicionário Python
-            # 2. Extrai apenas os textos (values) do dicionário para processamento
-            # 1. Fazer o parse da string recebida
-            # 2. Extrair a lista de chunks de dentro do JSON
 
             if not json_chunks:
                 return "Erro: A string JSON não continha a chave 'json_chunks' ou a lista estava vazia."
 
             chunks_texts = []
             for chunk_dict in json_chunks:
-                # chunk_dict é {"1": "Texto..."}
-                # Precisamos extrair o valor "Texto..."
                 if chunk_dict: # Garante que não está vazio
-                    # Pega o primeiro (e único) valor de cada dicionário
                     texto_do_chunk = list(chunk_dict.values())[0]
+                    texto_do_chunk = f"passage: {texto_do_chunk}"
                     chunks_texts.append(texto_do_chunk)
             
             if not chunks_texts:
                 return "Erro: O dicionário de chunks recebido está vazio."
 
-            # O resto da lógica de embedding continua a mesma...
             print(f"[INFO TOOL]: Gerando {len(chunks_texts)} chunks...")
-            embeddings_vetoriais = self._embedding_model.embed_documents(chunks_texts)
+            embeddings_vetoriais = self._embedding_model.embed_documents([f"passage: {c}" for c in chunks_texts])
             print("Embeddings gerados.")
 
             dados_qdrant= []
@@ -88,10 +85,11 @@ class EmbeddingGeneratorTool(BaseTool):
                 })
 
             print("Mandando chunks para o Qdrant...")
-            qtd_salva = self._vector_store.upsert_chunks(dados_qdrant)
-            # --- ETAPA 4: Retornar Mensagem Simples (A Solução do Problema) ---
+            qtd_salva_cosine = self._vector_store_cosine.upsert_chunks(dados_qdrant)
+            qtd_salva_dot = self._vector_store_dot.upsert_chunks(dados_qdrant)
+            qtd_salva_euclid = self._vector_store_euclidiana.upsert_chunks(dados_qdrant)
 
-            return f"Sucesso: gerados {qtd_salva} chunks e salvos no banco de dados!"
+            return f"Sucesso: gerados {qtd_salva_cosine} chunks de cosseno, {qtd_salva_euclid} de euclidiano e {qtd_salva_dot} de ponto salvos no banco de dados!"
                     
         except json.JSONDecodeError:
             return "Erro: A entrada não era uma string JSON válida."

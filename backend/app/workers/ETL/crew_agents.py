@@ -1,8 +1,8 @@
 from crewai import Agent
 from app.core.config import llm_rapido, llm_pro, llm_flash, llm_flash_lite
-from app.tools.embedding_generator_tool import EmbeddingGeneratorTool
-from app.tools.pdf_loader import PDFLoaderTool
-from app.tools.semantic_splitter_tool import SemanticTextSplitterTool
+from app.tools.ETL.embedding_generator_tool import EmbeddingGeneratorTool
+from app.tools.ETL.pdf_loader import PDFLoaderTool
+from app.tools.ETL.semantic_splitter_tool import SemanticTextSplitterTool
 
 class PreProcessingAgents():
 
@@ -83,7 +83,7 @@ class PreProcessingAgents():
                 "executar a Tool de Geração de Embeddings com a maior economia de contexto possível, "
                 "garantindo que APENAS o chunk seja passado para a Tool."
             ),          
-            llm=llm_pro,
+            llm=llm_flash,
             tools=[EmbeddingGeneratorTool(metadados_tcc=metadados_tcc)],
             allow_delegation=False,
             verbose=False,
